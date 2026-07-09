@@ -1,4 +1,6 @@
 # BlazorWasmReviverIssue
+Created to help solve issue [Window Closed throws a SecurityError LostBeard/SpawnDev.BlazorJS#62](https://github.com/LostBeard/SpawnDev.BlazorJS/issues/62)
+
 This project demonstrates an issue in Blazor Wasm framework reviver when deserializing a cross-origin window. 
 
 ### What
@@ -9,6 +11,24 @@ When you call `hasOwnProperty` on a cross-origin window for a non-allowed proper
 
 ### The solution
 Wrap `hasOwnProperty` or the entire conditional in a try/catch to prevent the exception from crashing the Blazor Wasm -> JS interop.
+
+### Test code
+- This code triggers the issue if it is not fixed.
+
+```cs
+// JS is IJSInProcessRuntime
+// create a new cross-origin popup window
+var popup = JS.Invoke<IJSInProcessObjectReference>("open", url, "Google Auth", "height=800,width=1200");
+
+if (popup is not null)
+{
+    // read the closed property using Reflect.get
+    // passing popup this way passes it through the Blazor Wasm reviver
+    while (!JS.Invoke<bool>("Reflect.get", popup, "closed"))
+        await Task.Delay(1000);
+    Log($"popup was closed");
+}
+```
 
 ### Problem code
 - From running blazor app, not repo source
@@ -45,24 +65,10 @@ e.attachReviver((e, t) => {
 });
 ```
 
-### Test code
-- This code triggers the issue if it is not fixed.
-```cs
-// create a new cross-origin popup window
-var popup = JS.Invoke<IJSInProcessObjectReference>("open", url, "Google Auth", "height=800,width=1200");
-
-if (popup is not null)
-{
-    // read the closed property using Reflect.get
-    // passing popup this way passes it through the Blazor Wasm reviver
-    while (!JS.Invoke<bool>("Reflect.get", popup, "closed"))
-        await Task.Delay(1000);
-    Log($"popup was closed");
-}
-```
-
-### Patch
+### Patch fix
 - The below code can be loaded into a Blazor Wasm app to runtime patch the Blazor Wasm framework call so it will not throw during revive of a cross-origin window.
+
+In index.html
 ```js
 const originalHasOwnPropertyPrototype = Object.prototype.hasOwnProperty;
 Object.prototype.hasOwnProperty = function (prop) {
