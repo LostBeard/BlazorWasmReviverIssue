@@ -8,7 +8,7 @@ The reviver uses `Object.prototype.hasOwnProperty` to check if a property exists
 When you call `hasOwnProperty` on a cross-origin window for a non-allowed property a security exception is thrown.
 
 ### The solution
-Wrap `hasOwnProperty` or the entire conditional in a try/catch to prevent the exception from crashing the Blazor Wasm -> interop.
+Wrap `hasOwnProperty` or the entire conditional in a try/catch to prevent the exception from crashing the Blazor Wasm -> JS interop.
 
 ### Problem code
 - From running blazor app, not repo source
