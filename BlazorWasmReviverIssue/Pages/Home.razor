@@ -1,0 +1,125 @@
+﻿@page "/"
+@inject IJSInProcessRuntime JS
+
+<PageTitle>Home</PageTitle>
+
+<h1>Home</h1>
+
+<button class="btn btn-primary" @onclick="TestCrossOriginWindow">Works</button>
+<button class="btn btn-primary" @onclick="ReviverFailsTest">Reviver Fails</button>
+
+<h4>Log</h4>
+<p>@((MarkupString)_logText.Replace(Environment.NewLine, "<br />"))</p>
+
+@code {
+    string _logText = "";
+    bool _busy = false;
+
+    /// <summary>
+    /// Fails using `while (!JS.Invoke<bool>("Reflect.get", popup, "closed"))`
+    /// The reviver triggers a security exception when reviving a cross-origin window.
+    /// If that reviver wrapped the `hasOwnProperty` usage in a try/catch this code would work.
+    /// set `enablePatch = true;` in index.html and run to test a workaround to the reviver issue.
+    /// </summary>
+    /// <returns></returns>
+    private async Task ReviverFailsTest()
+    {
+        _busy = true;
+        Log($"opening popup");
+        StateHasChanged();
+
+        var url = "https://www.googleapis.com/auth/youtube";
+
+        var popup = JS.Invoke<IJSInProcessObjectReference>("open", url, "Google Auth", "height=800,width=1200");
+
+        if (popup is not null)
+        {
+            // Close the popup in 5 seconds to automate the test
+            _ = new Func<Task>(async () =>
+            {
+                await Task.Delay(5000);
+                try
+                {
+                    popup.InvokeVoid("close");
+                }
+                catch { }
+            })();
+
+            // wait for the window to close
+            try
+            {
+                // read the closed property using Reflect.get
+                // passing popup this way passes it through the Blazor Wasm reviver
+                while (!JS.Invoke<bool>("Reflect.get", popup, "closed"))
+                    await Task.Delay(1000);
+                Log($"popup was closed");
+            }
+            catch (Exception ex)
+            {
+                Log($"popup closed access exception: {ex.ToString()}");
+            }
+        }
+        else
+        {
+            Log($"OpenCrossOriginWindow(): popup was null");
+        }
+
+        _busy = false;
+        StateHasChanged();
+    }
+    /// <summary>
+    /// Works using `while (!popup.GetValue<bool>("closed"))`
+    /// This test works because the cross-origin window is not passed through the Blazor Wasm reviver,
+    /// IJSInProcessObjectReference mathods are used instead to read property values which bypasses it.
+    /// </summary>
+    /// <returns></returns>
+    private async Task TestCrossOriginWindow()
+    {
+        _busy = true;
+        Log($"opening popup");
+        StateHasChanged();
+
+        var url = "https://www.googleapis.com/auth/youtube";
+
+        var popup = JS.Invoke<IJSInProcessObjectReference>("open", url, "Google Auth", "height=800,width=1200");
+
+        if (popup is not null)
+        {
+            // Close the popup in 5 seconds to automate the test
+            _ = new Func<Task>(async () =>
+            {
+                await Task.Delay(5000);
+                try
+                {
+                    popup.InvokeVoid("close");
+                }
+                catch { }
+            })();
+
+            // wait for the window to close
+            try
+            {
+                while (!popup.GetValue<bool>("closed"))
+                    await Task.Delay(1000);
+                Log($"popup was closed");
+            }
+            catch (Exception ex)
+            {
+                Log($"popup closed access exception: {ex.ToString()}");
+            }
+        }
+        else
+        {
+            Log($"OpenCrossOriginWindow(): popup was null");
+        }
+
+        _busy = false;
+        StateHasChanged();
+    }
+
+    void Log(params string?[] msg)
+    {
+        _logText = _logText + string.Join(Environment.NewLine, msg) + Environment.NewLine;
+        StateHasChanged();
+    }
+}
